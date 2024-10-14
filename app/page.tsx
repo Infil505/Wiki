@@ -1,4 +1,5 @@
-import { PaginaPrincipal } from "@/components/pagina-principal"
+import PaginaPrincipal from "@/components/pagina-principal";
+
 
 export default function Page() {
   return <PaginaPrincipal />
