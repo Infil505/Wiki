@@ -47,7 +47,7 @@ interface Campaign {
   current: number
 }
 
-const ADMIN_CODE = "ADMIN123"
+const ADMIN_CODE = "Administrador12345"
 
 export default function FoodCollectionApp() {
   const [activeTab, setActiveTab] = useState("inicio")
