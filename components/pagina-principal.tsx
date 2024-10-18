@@ -9,21 +9,29 @@ import { Textarea } from "@/components/ui/textarea";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { AlertCircle, CheckCircle2 } from 'lucide-react';
 import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, PieChart, Pie, LineChart, Line } from 'recharts';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@radix-ui/react-select';
 
 
 interface Donation {
   name: string;
   type: string;
-  quantity: number; // Asumiendo que quantity es un número
-  image: string; // URL de la imagen
+  quantity: number;
+  image: string;
 }
-
 
 type Request = {
   beneficiaryName: string;
   address: string;
   needs: string;
 };
+
+interface User {
+  username: string;
+  password: string;
+  type: 'administrador' | 'beneficiario' | 'restaurante';
+}
+
+const ADMIN_CODE = "ADMIN123"; // Código de administrador
 
 export default function FoodCollectionApp() {
   const [activeTab, setActiveTab] = useState("inicio");
@@ -36,10 +44,49 @@ export default function FoodCollectionApp() {
   const [userType, setUserType] = useState<'administrador' | 'beneficiario' | 'restaurante' | null>(null);
   const [donations, setDonations] = useState<Donation[]>([]);
   const [requests, setRequests] = useState<Request[]>([]);
+  const [users, setUsers] = useState<User[]>([]);
+  const [showRegisterForm, setShowRegisterForm] = useState(false);
+  const [registerUserType, setRegisterUserType] = useState<'beneficiario' | 'restaurante'>('beneficiario');
 
-  const handleLogin = (type: 'administrador' | 'beneficiario' | 'restaurante') => {
-    setIsLoggedIn(true);
-    setUserType(type); // Esto debería funcionar si userType está bien definido
+  const handleLogin = (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    const formData = new FormData(e.currentTarget);
+    const username = formData.get('username') as string;
+    const password = formData.get('password') as string;
+    const user = users.find(u => u.username === username && u.password === password);
+    if (user) {
+      setIsLoggedIn(true);
+      setUserType(user.type);
+      showNotificationMessage('Inicio de sesión exitoso', 'success');
+    } else {
+      showNotificationMessage('Credenciales incorrectas', 'error');
+    }
+  };
+
+  const handleRegister = (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    const formData = new FormData(e.currentTarget);
+    const username = formData.get('username') as string;
+    const password = formData.get('password') as string;
+    const adminCode = formData.get('adminCode') as string;
+
+    if (users.some(u => u.username === username)) {
+      showNotificationMessage('El nombre de usuario ya existe', 'error');
+      return;
+    }
+
+    let type: 'administrador' | 'beneficiario' | 'restaurante' = registerUserType;
+    if (adminCode === ADMIN_CODE) {
+      type = 'administrador';
+    } else if (adminCode) {
+      showNotificationMessage('Código de administrador incorrecto', 'error');
+      return;
+    }
+
+    const newUser: User = { username, password, type };
+    setUsers([...users, newUser]);
+    showNotificationMessage('Registro exitoso', 'success');
+    setShowRegisterForm(false);
   };
 
   const handleLogout = () => {
@@ -51,19 +98,16 @@ export default function FoodCollectionApp() {
   const handleDonation = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     const formData = new FormData(e.currentTarget);
-
-    // Verifica que el valor de 'image' no sea null y sea un archivo
     const imageFile = formData.get('image') as File | null;
     const newDonation: Donation = {
       name: formData.get('name') as string,
       type: formData.get('donationType') as string,
-      quantity: formData.get('quantity') !== null ? Number(formData.get('quantity')) :  0,
-      image: imageFile ? URL.createObjectURL(imageFile) : '', // Manejo de imagen
+      quantity: formData.get('quantity') !== null ? Number(formData.get('quantity')) : 0,
+      image: imageFile ? URL.createObjectURL(imageFile) : '',
     };
-
     setDonations([...donations, newDonation]);
     showNotificationMessage('Donación registrada con éxito', 'success');
-    e.currentTarget.reset(); // Resetea el formulario
+    e.currentTarget.reset();
   };
 
   const handleRequest = (e: React.FormEvent<HTMLFormElement>) => {
@@ -85,10 +129,8 @@ export default function FoodCollectionApp() {
     setShowNotification(true);
     setTimeout(() => setShowNotification(false), 3000);
   };
-  
 
   const handleEditDonation = (index: number) => {
-    // Implement edit functionality
     console.log('Editing donation at index:', index);
   };
 
@@ -98,7 +140,6 @@ export default function FoodCollectionApp() {
 
   const handleAddDonation = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
-    // Implement add functionality
     console.log('Adding new donation');
     setShowAddDonationForm(false);
   };
@@ -117,14 +158,61 @@ export default function FoodCollectionApp() {
       {!isLoggedIn ? (
         <Card className="bg-white shadow-lg">
           <CardHeader>
-            <CardTitle className="text-2xl text-green-700">Iniciar Sesión</CardTitle>
-            <CardDescription>Selecciona tu tipo de usuario</CardDescription>
+            <CardTitle className="text-2xl text-green-700">Acceso al Sistema</CardTitle>
+            <CardDescription>Inicia sesión o regístrate para continuar</CardDescription>
           </CardHeader>
-          <CardContent className="flex justify-center space-x-4">
-            <Button onClick={() => handleLogin('administrador')} className="bg-blue-500 hover:bg-blue-600">Administrador</Button>
-            <Button onClick={() => handleLogin('restaurante')} className="bg-green-500 hover:bg-green-600">Restaurante</Button>
-            <Button onClick={() => handleLogin('beneficiario')} className="bg-yellow-500 hover:bg-yellow-600">Beneficiario</Button>
+          <CardContent>
+            {!showRegisterForm ? (
+              <form onSubmit={handleLogin}>
+                <div className="grid w-full items-center gap-4">
+                  <div className="flex flex-col space-y-1.5">
+                    <Label htmlFor="username">Nombre de Usuario</Label>
+                    <Input id="username" name="username" placeholder="Tu nombre de usuario" required />
+                  </div>
+                  <div className="flex flex-col space-y-1.5">
+                    <Label htmlFor="password">Contraseña</Label>
+                    <Input id="password" name="password" type="password" placeholder="Tu contraseña" required />
+                  </div>
+                </div>
+                <Button type="submit" className="mt-4 bg-green-500 hover:bg-green-600">Iniciar Sesión</Button>
+              </form>
+            ) : (
+              <form onSubmit={handleRegister}>
+                <div className="grid w-full items-center gap-4">
+                  <div className="flex flex-col space-y-1.5">
+                    <Label htmlFor="username">Nombre de Usuario</Label>
+                    <Input id="username" name="username" placeholder="Elige un nombre de usuario" required />
+                  </div>
+                  <div className="flex flex-col space-y-1.5">
+                    <Label htmlFor="password">Contraseña</Label>
+                    <Input id="password" name="password" type="password" placeholder="Elige una contraseña" required />
+                  </div>
+                  <div className="flex flex-col space-y-1.5">
+                    <Label htmlFor="userType">Tipo de Usuario</Label>
+                    <Select onValueChange={(value) => setRegisterUserType(value as 'beneficiario' | 'restaurante')}>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Selecciona el tipo de usuario" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="beneficiario">Beneficiario</SelectItem>
+                        <SelectItem value="restaurante">Restaurante/Donador</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="flex flex-col space-y-1.5">
+                    <Label htmlFor="adminCode">Código de Administrador (opcional)</Label>
+                    <Input id="adminCode" name="adminCode" placeholder="Solo para administradores" />
+                  </div>
+                </div>
+                <Button type="submit" className="mt-4 bg-blue-500 hover:bg-blue-600">Registrarse</Button>
+              </form>
+            )}
           </CardContent>
+          <CardFooter className="flex justify-center">
+            <Button variant="link" onClick={() => setShowRegisterForm(!showRegisterForm)}>
+              {showRegisterForm ? "¿Ya tienes una cuenta? Inicia sesión" : "¿No tienes una cuenta? Regístrate"}
+            </Button>
+          </CardFooter>
         </Card>
       ) : (
         <>
@@ -189,40 +277,6 @@ export default function FoodCollectionApp() {
               </TabsContent>
 
               {userType === 'restaurante' && (
-                <TabsContent value="donors">
-                  <Card className="bg-white shadow-lg">
-                    <CardHeader>
-                      <CardTitle className="text-2xl text-green-700">Donar Alimentos</CardTitle>
-                      <CardDescription>Restaurantes e individuos pueden donar aquí</CardDescription>
-                    </CardHeader>
-                    <CardContent>
-                      <form onSubmit={handleDonation}>
-                        <div className="grid w-full items-center gap-4">
-                          <div className="flex flex-col space-y-1.5">
-                            <Label htmlFor="name">Nombre</Label>
-                            <Input id="name" name="name" placeholder="Tu nombre o nombre del restaurante" required />
-                          </div>
-                          <div className="flex flex-col space-y-1.5">
-                            <Label htmlFor="donationType">Tipo de Donación</Label>
-                            <Input id="donationType" name="donationType" placeholder="Alimentos no perecederos, comida preparada, etc." required />
-                          </div>
-                          <div className="flex flex-col space-y-1.5">
-                            <Label htmlFor="quantity">Cantidad</Label>
-                            <Input id="quantity" name="quantity" placeholder="Cantidad aproximada" required />
-                          </div>
-                          <div className="flex flex-col space-y-1.5">
-                            <Label htmlFor="image">Imagen del Producto</Label>
-                            <Input id="image" name="image" type="file" required />
-                          </div>
-                        </div>
-                        <Button type="submit" className="mt-4 bg-green-500 hover:bg-green-600">Registrar Donación</Button>
-                      </form>
-                    </CardContent>
-                  </Card>
-                </TabsContent>
-              )}
-
-              {userType === 'restaurante' && (
                 <>
                   <TabsContent value="donaciones">
                     <Card className="bg-white shadow-lg">
@@ -233,6 +287,7 @@ export default function FoodCollectionApp() {
                       <CardContent>
                         <form onSubmit={handleDonation}>
                           <div className="grid w-full items-center gap-4">
+                            
                             <div className="flex flex-col space-y-1.5">
                               <Label htmlFor="name">Nombre</Label>
                               <Input id="name" name="name" placeholder="Tu nombre o nombre del restaurante" required />
@@ -278,7 +333,6 @@ export default function FoodCollectionApp() {
                   </TabsContent>
                 </>
               )}
-
 
               {userType === 'administrador' && (
                 <>
