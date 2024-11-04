@@ -292,8 +292,11 @@ export default function FoodCollectionApp() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-b from-blue-50 to-white">
-      <div className="container mx-auto p-4">
+    <div className="relative min-h-screen bg-cover bg-center" style={{ backgroundImage: "url('/img/Diseño sin título.png')" }}>
+    <div className="absolute inset-0 filter blur-[10px]" />
+    <div className="absolute inset-0 bg-gradient-to-b from-black to-transparent opacity-100" />
+    <div className="container mx-auto p-4 relative z-10">
+
         <h1 className="text-4xl font-bold text-center mb-6 text-blue-900">Proyecto de Recolección de Alimentos</h1>
 
         {showNotification && (
@@ -412,28 +415,45 @@ export default function FoodCollectionApp() {
                     </>
                   )}
                   {userType === 'administrador' && (
-                    <>
-                      <TabsTrigger value="manageDonations" className="data-[state=active]:bg-white data-[state=active]:text-blue-900 rounded-md transition-all duration-200">
-                        <Settings className="w-4 h-4 mr-2" />
-                        Gestionar Donaciones
+                    <div className="flex space-x-4">
+                    {[
+                      {
+                        value: "manageDonations",
+                        label: "Gestionar Donaciones",
+                        icon: <Settings className="w-4 h-4 mr-2" />,
+                      },
+                      {
+                        value: "manageRequests",
+                        label: "Gestionar Solicitudes",
+                        icon: <FileText className="w-4 h-4 mr-2" />,
+                      },
+                      {
+                        value: "campaigns",
+                        label: "Campañas",
+                        icon: <PieChart className="w-4 h-4 mr-2" />,
+                      },
+                      {
+                        value: "reports",
+                        label: "Reportes",
+                        icon: <BarChart className="w-4 h-4 mr-2" />,
+                      },
+                      {
+                        value: "notifications",
+                        label: "Notificaciones",
+                        icon: <Bell className="w-4 h-4 mr-2" />,
+                      },
+                    ].map((tab) => (
+                      <TabsTrigger
+                        key={tab.value}
+                        value={tab.value}
+                        className="data-[state=active]:bg-white data-[state=active]:text-blue-900 rounded-md transition-all duration-200"
+                      >
+                        {tab.icon}
+                        {tab.label}
                       </TabsTrigger>
-                      <TabsTrigger value="manageRequests" className="data-[state=active]:bg-white data-[state=active]:text-blue-900 rounded-md transition-all duration-200">
-                        <FileText className="w-4 h-4 mr-2" />
-                        Gestionar Solicitudes
-                      </TabsTrigger>
-                      <TabsTrigger value="campaigns" className="data-[state=active]:bg-white data-[state=active]:text-blue-900 rounded-md transition-all duration-200">
-                        <PieChart className="w-4 h-4 mr-2" />
-                        Campañas
-                      </TabsTrigger>
-                      <TabsTrigger value="reports" className="data-[state=active]:bg-white data-[state=active]:text-blue-900 rounded-md transition-all duration-200">
-                        <BarChart className="w-4 h-4 mr-2" />
-                        Reportes
-                      </TabsTrigger>
-                      <TabsTrigger value="notifications" className="data-[state=active]:bg-white data-[state=active]:text-blue-900 rounded-md transition-all duration-200">
-                        <Bell className="w-4 h-4 mr-2" />
-                        Notificaciones
-                      </TabsTrigger>
-                    </>
+                    ))}
+                  </div>
+                  
                   )}
                 </TabsList>
 
@@ -653,69 +673,91 @@ export default function FoodCollectionApp() {
                     </TabsContent>
 
                     <TabsContent value="reports">
-                      <Card className="bg-white shadow-lg">
-                        <CardHeader>
-                          <CardTitle className="text-2xl text-blue-900">Reportes</CardTitle>
-                          <CardDescription>Generación y visualización de reportes</CardDescription>
-                        </CardHeader>
-                        <CardContent>
-                          <div className="flex space-x-4 mb-4">
-                            <Button variant="outline" onClick={() => setSelectedReport('campanas')} className={selectedReport === 'campanas' ? 'bg-blue-100' : ''}>Campañas</Button>
-                            <Button variant="outline" onClick={() => setSelectedReport('donacionesAceptadas')} className={selectedReport === 'donacionesAceptadas' ? 'bg-blue-100' : ''}>Donaciones Aceptadas</Button>
-                            <Button variant="outline" onClick={() => setSelectedReport('donacionesEntregadas')} className={selectedReport === 'donacionesEntregadas' ? 'bg-blue-100' : ''}>Donaciones Entregadas</Button>
-                          </div>
-                          <div className="h-64 w-full">
-                            <ResponsiveContainer width="100%" height="100%">
-                              {selectedReport === 'campanas' ? (
-                                <BarChart data={campaigns.map(c => ({ name: c.name, value: c.current }))}>
-                                  <XAxis dataKey="name" />
-                                  <YAxis />
-                                  <Tooltip />
-                                  <Bar dataKey="value" fill="#3B82F6" />
-                                </BarChart>
-                              ) : selectedReport === 'donacionesAceptadas' ? (
-                                <RePieChart>
-                                  <Pie 
-                                    dataKey="value" 
-                                    data={[
-                                      { name: 'Aceptadas', value: donations.filter(d => d.status === 'accepted').length },
-                                      { name: 'Pendientes', value: donations.filter(d => d.status === 'pending').length },
-                                    ]} 
-                                    fill="#3B82F6" 
-                                    label 
-                                  />
-                                  <Tooltip />
-                                </RePieChart>
-                              ) : (
-                                <LineChart data={[
-                                  { name: 'Ene', value: 400 },
-                                  { name: 'Feb', value: 300 },
-                                  { name: 'Mar', value: 200 },
-                                  { name: 'Abr', value: 278 },
-                                  { name: 'May', value: 189 },
-                                ]}>
-                                  <XAxis dataKey="name" />
-                                  <YAxis />
-                                  <Tooltip />
-                                  <Line type="monotone" dataKey="value" stroke="#3B82F6" />
-                                </LineChart>
-                              )}
-                            </ResponsiveContainer>
-                          </div>
-                          <div className="mt-4 text-gray-600">
-                            {selectedReport === 'campanas' && (
-                              <p>Este gráfico muestra el progreso de las diferentes campañas de donación activas. Cada barra representa una campaña y su altura indica la cantidad de donaciones recibidas.</p>
-                            )}
-                            {selectedReport === 'donacionesAceptadas' && (
-                              <p>Este gráfico circular muestra la proporción de donaciones aceptadas en comparación con las pendientes. Nos ayuda a visualizar la eficiencia en el proceso de aceptación de donaciones.</p>
-                            )}
-                            {selectedReport === 'donacionesEntregadas' && (
-                              <p>Este gráfico de líneas muestra la tendencia de donaciones entregadas a lo largo del tiempo. Nos permite identificar patrones y picos en la actividad de entrega de donaciones.</p>
-                            )}
-                          </div>
-                        </CardContent>
-                      </Card>
-                    </TabsContent>
+  <Card className="bg-white shadow-lg">
+    <CardHeader>
+      <CardTitle className="text-2xl text-blue-900">Reportes</CardTitle>
+      <CardDescription>Generación y visualización de reportes</CardDescription>
+    </CardHeader>
+    <CardContent>
+      <div className="flex space-x-4 mb-4">
+        <Button variant="outline" onClick={() => setSelectedReport('campanas')} className={selectedReport === 'campanas' ? 'bg-blue-100' : ''}>Campañas</Button>
+        <Button variant="outline" onClick={() => setSelectedReport('donacionesAceptadas')} className={selectedReport === 'donacionesAceptadas' ? 'bg-blue-100' : ''}>Donaciones Aceptadas</Button>
+        <Button variant="outline" onClick={() => setSelectedReport('donacionesEntregadas')} className={selectedReport === 'donacionesEntregadas' ? 'bg-blue-100' : ''}>Donaciones Entregadas</Button>
+      </div>
+      <div className="grid grid-cols-2 gap-4 h-64 w-full">
+        {/* Primer gráfico - Datos de campaña actual */}
+        <ResponsiveContainer width="100%" height="100%">
+          <BarChart data={[
+            { name: 'Campaña 1', current: 150 },
+            { name: 'Campaña 2', current: 200 },
+            { name: 'Campaña 3', current: 180 },
+            { name: 'Campaña 4', current: 120 }
+          ]}>
+            <XAxis dataKey="name" />
+            <YAxis />
+            <Tooltip />
+            <Bar dataKey="current" fill="#3B82F6" />
+          </BarChart>
+        </ResponsiveContainer>
+
+        {/* Segundo gráfico - Cambia según la selección */}
+        <ResponsiveContainer width="100%" height="100%">
+          {selectedReport === 'campanas' ? (
+            <RePieChart>
+              <Pie 
+                dataKey="value" 
+                data={[
+                  { name: 'Aceptadas', value: donations.filter(d => d.status === 'accepted').length },
+                  { name: 'Pendientes', value: donations.filter(d => d.status === 'pending').length },
+                ]} 
+                fill="#3B82F6" 
+                label 
+              />
+              <Tooltip />
+            </RePieChart>
+          ) : selectedReport === 'donacionesAceptadas' ? (
+            <LineChart data={[
+              { name: 'Ene', value: 400 },
+              { name: 'Feb', value: 300 },
+              { name: 'Mar', value: 200 },
+              { name: 'Abr', value: 278 },
+              { name: 'May', value: 189 },
+            ]}>
+              <XAxis dataKey="name" />
+              <YAxis />
+              <Tooltip />
+              <Line type="monotone" dataKey="value" stroke="#3B82F6" />
+            </LineChart>
+          ) : (
+            <BarChart data={[
+              { name: 'Ene', value: 400 },
+              { name: 'Feb', value: 300 },
+              { name: 'Mar', value: 200 },
+              { name: 'Abr', value: 278 },
+              { name: 'May', value: 189 },
+            ]}>
+              <XAxis dataKey="name" />
+              <YAxis />
+              <Tooltip />
+              <Bar dataKey="value" fill="#3B82F6" />
+            </BarChart>
+          )}
+        </ResponsiveContainer>
+      </div>
+      <div className="mt-4 text-gray-600">
+        {selectedReport === 'campanas' && (
+          <p>Los gráficos muestran el progreso de las campañas activas y la distribución de donaciones aceptadas vs pendientes.</p>
+        )}
+        {selectedReport === 'donacionesAceptadas' && (
+          <p>Los gráficos muestran el estado actual de las campañas y la tendencia de donaciones aceptadas en el tiempo.</p>
+        )}
+        {selectedReport === 'donacionesEntregadas' && (
+          <p>Los gráficos muestran el progreso de las campañas y la tendencia de donaciones entregadas a lo largo del tiempo.</p>
+        )}
+      </div>
+    </CardContent>
+  </Card>
+</TabsContent>
 
                     <TabsContent value="notifications">
                       <Card className="bg-white shadow-lg">
