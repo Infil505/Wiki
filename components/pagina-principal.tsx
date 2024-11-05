@@ -1,6 +1,6 @@
-"use client"
+'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle, CardFooter, CardDescription } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
@@ -51,6 +51,7 @@ interface Campaign {
 
 interface Notification {
   id: string
+  type: 'system' | 'donation' | 'request'
   message: string
   timestamp: number
 }
@@ -75,15 +76,13 @@ export default function FoodCollectionApp() {
   const [campaigns, setCampaigns] = useState<Campaign[]>([])
   const [notifications, setNotifications] = useState<Notification[]>([])
 
-  useEffect(() => {
-    // Load data from localStorage
+  const loadDataFromLocalStorage = useCallback(() => {
     const loadedDonations = JSON.parse(localStorage.getItem('donations') || '[]')
     const loadedRequests = JSON.parse(localStorage.getItem('requests') || '[]')
     const loadedUsers = JSON.parse(localStorage.getItem('users') || '[]')
     const loadedCampaigns = JSON.parse(localStorage.getItem('campaigns') || '[]')
     const loadedNotifications = JSON.parse(localStorage.getItem('notifications') || '[]')
 
-    // Clean up old data
     const now = Date.now()
     const cleanedDonations = loadedDonations.filter((d: Donation) => (now - d.timestamp) < DATA_RETENTION_PERIOD)
     const cleanedRequests = loadedRequests.filter((r: Request) => (now - r.timestamp) < DATA_RETENTION_PERIOD)
@@ -95,38 +94,33 @@ export default function FoodCollectionApp() {
     setUsers(loadedUsers)
     setCampaigns(cleanedCampaigns)
     setNotifications(cleanedNotifications)
-
-    // Set up interval to clean data every hour
-    const cleanupInterval = setInterval(() => {
-      const now = Date.now()
-      setDonations(prev => {
-        const cleaned = prev.filter(d => (now - d.timestamp) < DATA_RETENTION_PERIOD)
-        localStorage.setItem('donations', JSON.stringify(cleaned))
-        return cleaned
-      })
-      setRequests(prev => {
-        const cleaned = prev.filter(r => (now - r.timestamp) < DATA_RETENTION_PERIOD)
-        localStorage.setItem('requests', JSON.stringify(cleaned))
-        return cleaned
-      })
-      setCampaigns(prev => {
-        const cleaned = prev.filter(c => (now - c.timestamp) < DATA_RETENTION_PERIOD)
-        localStorage.setItem('campaigns', JSON.stringify(cleaned))
-        return cleaned
-      })
-      setNotifications(prev => {
-        const cleaned = prev.filter(n => (now - n.timestamp) < DATA_RETENTION_PERIOD)
-        localStorage.setItem('notifications', JSON.stringify(cleaned))
-        return cleaned
-      })
-    }, 60 * 60 * 1000) // Run every hour
-
-    return () => clearInterval(cleanupInterval)
   }, [])
 
-  const addNotification = (message: string) => {
-    const newNotification = {
+  useEffect(() => {
+    loadDataFromLocalStorage()
+
+    const handleStorageChange = (e: StorageEvent) => {
+      if (e.key === 'donations' || e.key === 'requests' || e.key === 'notifications') {
+        loadDataFromLocalStorage()
+      }
+    }
+
+    window.addEventListener('storage', handleStorageChange)
+
+    const cleanupInterval = setInterval(() => {
+      loadDataFromLocalStorage()
+    }, 60 * 60 * 1000) // Run every hour
+
+    return () => {
+      window.removeEventListener('storage', handleStorageChange)
+      clearInterval(cleanupInterval)
+    }
+  }, [loadDataFromLocalStorage])
+
+  const addNotification = useCallback((message: string, type: 'system' | 'donation' | 'request') => {
+    const newNotification: Notification = {
       id: Date.now().toString(),
+      type,
       message,
       timestamp: Date.now()
     }
@@ -135,7 +129,14 @@ export default function FoodCollectionApp() {
       localStorage.setItem('notifications', JSON.stringify(updated))
       return updated
     })
-  }
+  }, [])
+
+  const showNotificationMessage = useCallback((message: string, type: 'success' | 'error') => {
+    setNotificationMessage(message)
+    setNotificationType(type)
+    setShowNotification(true)
+    setTimeout(() => setShowNotification(false), 3000)
+  }, [])
 
   const handleLogin = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault()
@@ -148,7 +149,7 @@ export default function FoodCollectionApp() {
       setUserType(user.type)
       showNotificationMessage('Inicio de sesión exitoso', 'success')
       if (user.type === 'administrador') {
-        addNotification('Nuevo inicio de sesión de administrador')
+        addNotification('Nuevo inicio de sesión de administrador', 'system')
       }
     } else {
       showNotificationMessage('Credenciales incorrectas', 'error')
@@ -184,7 +185,7 @@ export default function FoodCollectionApp() {
     showNotificationMessage('Registro exitoso', 'success')
     setShowRegisterForm(false)
     if (type === 'administrador') {
-      addNotification('Nuevo administrador registrado')
+      addNotification('Nuevo administrador registrado', 'system')
     }
   }
 
@@ -213,7 +214,7 @@ export default function FoodCollectionApp() {
       return updated
     })
     showNotificationMessage('Donación registrada con éxito', 'success')
-    addNotification('Nueva donación registrada')
+    addNotification(`Nueva donación de ${newDonation.quantity} ${newDonation.type} por ${newDonation.name}`, 'donation')
     e.currentTarget.reset()
   }
 
@@ -234,15 +235,8 @@ export default function FoodCollectionApp() {
       return updated
     })
     showNotificationMessage('Solicitud enviada con éxito', 'success')
-    addNotification('Nueva solicitud de alimentos recibida')
+    addNotification('Nueva solicitud de alimentos recibida', 'request')
     e.currentTarget.reset()
-  }
-
-  const showNotificationMessage = (message: string, type: 'success' | 'error') => {
-    setNotificationMessage(message)
-    setNotificationType(type)
-    setShowNotification(true)
-    setTimeout(() => setShowNotification(false), 3000)
   }
 
   const handleEditDonation = (id: string) => {
@@ -257,15 +251,30 @@ export default function FoodCollectionApp() {
       return updated
     })
     showNotificationMessage('Donación eliminada con éxito', 'success')
-    addNotification('Donación eliminada')
+    addNotification('Donación eliminada', 'system')
   }
 
   const handleAddDonation = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault()
-    // Implement add functionality
-    console.log('Adding new donation')
+    const formData = new FormData(e.currentTarget)
+    const newDonation: Donation = {
+      id: Date.now().toString(),
+      name: formData.get('name') as string,
+      type: formData.get('donationType') as string,
+      quantity: Number(formData.get('quantity')),
+      image: '/placeholder.svg', // You might want to handle image upload separately
+      status: 'pending',
+      timestamp: Date.now()
+    }
+    setDonations(prev => {
+      const updated = [...prev, newDonation]
+      localStorage.setItem('donations', JSON.stringify(updated))
+      return updated
+    })
+    showNotificationMessage('Nueva donación agregada con éxito', 'success')
+    addNotification('Nueva donación agregada manualmente', 'donation')
     setShowAddDonationForm(false)
-    addNotification('Nueva donación agregada manualmente')
+    e.currentTarget.reset()
   }
 
   const handleAddCampaign = (e: React.FormEvent<HTMLFormElement>) => {
@@ -287,15 +296,15 @@ export default function FoodCollectionApp() {
       return updated
     })
     showNotificationMessage('Campaña creada con éxito', 'success')
-    addNotification('Nueva campaña creada')
+    addNotification('Nueva campaña creada', 'system')
     e.currentTarget.reset()
   }
 
   return (
     <div className="relative min-h-screen bg-cover bg-center" style={{ backgroundImage: "url('/img/Diseño sin título.png')" }}>
-    <div className="absolute inset-0 filter blur-[10px]" />
-    <div className="absolute inset-0 bg-gradient-to-b from-black to-transparent opacity-100" />
-    <div className="container mx-auto p-4 relative z-10">
+      <div className="absolute inset-0 filter blur-[10px]" />
+      <div className="absolute inset-0 bg-gradient-to-b from-black to-transparent opacity-100" />
+      <div className="container mx-auto p-4 relative z-10">
 
         <h1 className="text-4xl font-bold text-center mb-6 text-blue-900">Proyecto de Recolección de Alimentos</h1>
 
@@ -317,7 +326,7 @@ export default function FoodCollectionApp() {
                 <form onSubmit={handleLogin}>
                   <div className="grid w-full items-center gap-4">
                     <div className="flex flex-col space-y-1.5">
-                      <Label htmlFor="username">Nombre de Usuario</Label>
+                      <Label htmlFor="username">Nombre de  Usuario</Label>
                       <Input id="username" name="username" placeholder="Tu nombre de usuario" required />
                     </div>
                     <div className="flex flex-col space-y-1.5">
@@ -415,45 +424,24 @@ export default function FoodCollectionApp() {
                     </>
                   )}
                   {userType === 'administrador' && (
-                    <div className="flex space-x-4">
-                    {[
-                      {
-                        value: "manageDonations",
-                        label: "Gestionar Donaciones",
-                        icon: <Settings className="w-4 h-4 mr-2" />,
-                      },
-                      {
-                        value: "manageRequests",
-                        label: "Gestionar Solicitudes",
-                        icon: <FileText className="w-4 h-4 mr-2" />,
-                      },
-                      {
-                        value: "campaigns",
-                        label: "Campañas",
-                        icon: <PieChart className="w-4 h-4 mr-2" />,
-                      },
-                      {
-                        value: "reports",
-                        label: "Reportes",
-                        icon: <BarChart className="w-4 h-4 mr-2" />,
-                      },
-                      {
-                        value: "notifications",
-                        label: "Notificaciones",
-                        icon: <Bell className="w-4 h-4 mr-2" />,
-                      },
-                    ].map((tab) => (
-                      <TabsTrigger
-                        key={tab.value}
-                        value={tab.value}
-                        className="data-[state=active]:bg-white data-[state=active]:text-blue-900 rounded-md transition-all duration-200"
-                      >
-                        {tab.icon}
-                        {tab.label}
+                    <>
+                      <TabsTrigger value="manageDonations" className="data-[state=active]:bg-white data-[state=active]:text-blue-900 rounded-md transition-all duration-200">
+                        <Settings className="w-4 h-4 mr-2" />
+                        Gestionar Donaciones
                       </TabsTrigger>
-                    ))}
-                  </div>
-                  
+                      <TabsTrigger value="manageRequests" className="data-[state=active]:bg-white data-[state=active]:text-blue-900 rounded-md transition-all duration-200">
+                        <FileText className="w-4 h-4 mr-2" />
+                        Gestionar Solicitudes
+                      </TabsTrigger>
+                      <TabsTrigger value="campaigns" className="data-[state=active]:bg-white data-[state=active]:text-blue-900 rounded-md transition-all duration-200">
+                        <PieChart className="w-4 h-4 mr-2" />
+                        Campañas
+                      </TabsTrigger>
+                      <TabsTrigger value="reports" className="data-[state=active]:bg-white data-[state=active]:text-blue-900 rounded-md transition-all duration-200">
+                        <BarChart className="w-4 h-4 mr-2" />
+                        Reportes
+                      </TabsTrigger>
+                    </>
                   )}
                 </TabsList>
 
@@ -587,10 +575,6 @@ export default function FoodCollectionApp() {
                                   <Label htmlFor="quantity">Cantidad</Label>
                                   <Input id="quantity" name="quantity" type="number" placeholder="Cantidad" required />
                                 </div>
-                                <div className="flex flex-col space-y-1.5">
-                                  <Label htmlFor="image">Imagen</Label>
-                                  <Input id="image" name="image" type="file" accept="image/*" required />
-                                </div>
                               </div>
                               <Button type="submit" className="mt-4 w-full bg-blue-600 hover:bg-blue-700 text-white transition-colors duration-200">Guardar Donación</Button>
                             </form>
@@ -673,91 +657,91 @@ export default function FoodCollectionApp() {
                     </TabsContent>
 
                     <TabsContent value="reports">
-  <Card className="bg-white shadow-lg">
-    <CardHeader>
-      <CardTitle className="text-2xl text-blue-900">Reportes</CardTitle>
-      <CardDescription>Generación y visualización de reportes</CardDescription>
-    </CardHeader>
-    <CardContent>
-      <div className="flex space-x-4 mb-4">
-        <Button variant="outline" onClick={() => setSelectedReport('campanas')} className={selectedReport === 'campanas' ? 'bg-blue-100' : ''}>Campañas</Button>
-        <Button variant="outline" onClick={() => setSelectedReport('donacionesAceptadas')} className={selectedReport === 'donacionesAceptadas' ? 'bg-blue-100' : ''}>Donaciones Aceptadas</Button>
-        <Button variant="outline" onClick={() => setSelectedReport('donacionesEntregadas')} className={selectedReport === 'donacionesEntregadas' ? 'bg-blue-100' : ''}>Donaciones Entregadas</Button>
-      </div>
-      <div className="grid grid-cols-2 gap-4 h-64 w-full">
-        {/* Primer gráfico - Datos de campaña actual */}
-        <ResponsiveContainer width="100%" height="100%">
-          <BarChart data={[
-            { name: 'Campaña 1', current: 150 },
-            { name: 'Campaña 2', current: 200 },
-            { name: 'Campaña 3', current: 180 },
-            { name: 'Campaña 4', current: 120 }
-          ]}>
-            <XAxis dataKey="name" />
-            <YAxis />
-            <Tooltip />
-            <Bar dataKey="current" fill="#3B82F6" />
-          </BarChart>
-        </ResponsiveContainer>
+                      <Card className="bg-white shadow-lg">
+                        <CardHeader>
+                          <CardTitle className="text-2xl text-blue-900">Reportes</CardTitle>
+                          <CardDescription>Generación y visualización de reportes</CardDescription>
+                        </CardHeader>
+                        <CardContent>
+                          <div className="flex space-x-4 mb-4">
+                            <Button variant="outline" onClick={() => setSelectedReport('campanas')} className={selectedReport === 'campanas' ? 'bg-blue-100' : ''}>Campañas</Button>
+                            <Button variant="outline" onClick={() => setSelectedReport('donacionesAceptadas')} className={selectedReport === 'donacionesAceptadas' ? 'bg-blue-100' : ''}>Donaciones Aceptadas</Button>
+                            <Button variant="outline" onClick={() => setSelectedReport('donacionesEntregadas')} className={selectedReport === 'donacionesEntregadas' ? 'bg-blue-100' : ''}>Donaciones Entregadas</Button>
+                          </div>
+                          <div className="grid grid-cols-2 gap-4 h-64 w-full">
+                            {/* Primer gráfico - Datos de campaña actual */}
+                            <ResponsiveContainer width="100%" height="100%">
+                              <BarChart data={[
+                                { name: 'Campaña 1', current: 150 },
+                                { name: 'Campaña 2', current: 200 },
+                                { name: 'Campaña 3', current: 180 },
+                                { name: 'Campaña 4', current: 120 }
+                              ]}>
+                                <XAxis dataKey="name" />
+                                <YAxis />
+                                <Tooltip />
+                                <Bar dataKey="current" fill="#3B82F6" />
+                              </BarChart>
+                            </ResponsiveContainer>
 
-        {/* Segundo gráfico - Cambia según la selección */}
-        <ResponsiveContainer width="100%" height="100%">
-          {selectedReport === 'campanas' ? (
-            <RePieChart>
-              <Pie 
-                dataKey="value" 
-                data={[
-                  { name: 'Aceptadas', value: donations.filter(d => d.status === 'accepted').length },
-                  { name: 'Pendientes', value: donations.filter(d => d.status === 'pending').length },
-                ]} 
-                fill="#3B82F6" 
-                label 
-              />
-              <Tooltip />
-            </RePieChart>
-          ) : selectedReport === 'donacionesAceptadas' ? (
-            <LineChart data={[
-              { name: 'Ene', value: 400 },
-              { name: 'Feb', value: 300 },
-              { name: 'Mar', value: 200 },
-              { name: 'Abr', value: 278 },
-              { name: 'May', value: 189 },
-            ]}>
-              <XAxis dataKey="name" />
-              <YAxis />
-              <Tooltip />
-              <Line type="monotone" dataKey="value" stroke="#3B82F6" />
-            </LineChart>
-          ) : (
-            <BarChart data={[
-              { name: 'Ene', value: 400 },
-              { name: 'Feb', value: 300 },
-              { name: 'Mar', value: 200 },
-              { name: 'Abr', value: 278 },
-              { name: 'May', value: 189 },
-            ]}>
-              <XAxis dataKey="name" />
-              <YAxis />
-              <Tooltip />
-              <Bar dataKey="value" fill="#3B82F6" />
-            </BarChart>
-          )}
-        </ResponsiveContainer>
-      </div>
-      <div className="mt-4 text-gray-600">
-        {selectedReport === 'campanas' && (
-          <p>Los gráficos muestran el progreso de las campañas activas y la distribución de donaciones aceptadas vs pendientes.</p>
-        )}
-        {selectedReport === 'donacionesAceptadas' && (
-          <p>Los gráficos muestran el estado actual de las campañas y la tendencia de donaciones aceptadas en el tiempo.</p>
-        )}
-        {selectedReport === 'donacionesEntregadas' && (
-          <p>Los gráficos muestran el progreso de las campañas y la tendencia de donaciones entregadas a lo largo del tiempo.</p>
-        )}
-      </div>
-    </CardContent>
-  </Card>
-</TabsContent>
+                            {/* Segundo gráfico - Cambia según la selección */}
+                            <ResponsiveContainer width="100%" height="100%">
+                              {selectedReport === 'campanas' ? (
+                                <RePieChart>
+                                  <Pie 
+                                    dataKey="value" 
+                                    data={[
+                                      { name: 'Aceptadas', value: donations.filter(d => d.status === 'accepted').length },
+                                      { name: 'Pendientes', value: donations.filter(d => d.status === 'pending').length },
+                                    ]} 
+                                    fill="#3B82F6" 
+                                    label 
+                                  />
+                                  <Tooltip />
+                                </RePieChart>
+                              ) : selectedReport === 'donacionesAceptadas' ? (
+                                <LineChart data={[
+                                  { name: 'Ene', value: 400 },
+                                  { name: 'Feb', value: 300 },
+                                  { name: 'Mar', value: 200 },
+                                  { name: 'Abr', value: 278 },
+                                  { name: 'May', value: 189 },
+                                ]}>
+                                  <XAxis dataKey="name" />
+                                  <YAxis />
+                                  <Tooltip />
+                                  <Line type="monotone" dataKey="value" stroke="#3B82F6" />
+                                </LineChart>
+                              ) : (
+                                <BarChart data={[
+                                  { name: 'Ene', value: 400 },
+                                  { name: 'Feb', value: 300 },
+                                  { name: 'Mar', value: 200 },
+                                  { name: 'Abr', value: 278 },
+                                  { name: 'May', value: 189 },
+                                ]}>
+                                  <XAxis dataKey="name" />
+                                  <YAxis />
+                                  <Tooltip />
+                                  <Bar dataKey="value" fill="#3B82F6" />
+                                </BarChart>
+                              )}
+                            </ResponsiveContainer>
+                          </div>
+                          <div className="mt-4 text-gray-600">
+                            {selectedReport === 'campanas' && (
+                              <p>Los gráficos muestran el progreso de las campañas activas y la distribución de donaciones aceptadas vs pendientes.</p>
+                            )}
+                            {selectedReport === 'donacionesAceptadas' && (
+                              <p>Los gráficos muestran el estado actual de las campañas y la tendencia de donaciones aceptadas en el tiempo.</p>
+                            )}
+                            {selectedReport === 'donacionesEntregadas' && (
+                              <p>Los gráficos muestran el progreso de las campañas y la tendencia de donaciones entregadas a lo largo del tiempo.</p>
+                            )}
+                          </div>
+                        </CardContent>
+                      </Card>
+                    </TabsContent>
 
                     <TabsContent value="notifications">
                       <Card className="bg-white shadow-lg">
@@ -766,20 +750,26 @@ export default function FoodCollectionApp() {
                           <CardDescription>Últimas actividades en el sistema</CardDescription>
                         </CardHeader>
                         <CardContent>
-                          {notifications.length > 0 ? (
-                            <div className="space-y-4">
-                              {notifications.map((notification) => (
-                                <div key={notification.id} className="border-b border-gray-200 pb-4">
-                                  <p className="text-gray-700">{notification.message}</p>
-                                  <p className="text-sm text-gray-500">
-                                    {new Date(notification.timestamp).toLocaleString()}
-                                  </p>
-                                </div>
-                              ))}
-                            </div>
-                          ) : (
-                            <p className="text-gray-600">No hay notificaciones nuevas.</p>
-                          )}
+                          <Tabs defaultValue="all">
+                            <TabsList>
+                              <TabsTrigger value="all">Todas</TabsTrigger>
+                              <TabsTrigger value="system">Sistema</TabsTrigger>
+                              <TabsTrigger value="donation">Donaciones</TabsTrigger>
+                              <TabsTrigger value="request">Solicitudes</TabsTrigger>
+                            </TabsList>
+                            <TabsContent value="all">
+                              <NotificationList notifications={notifications} />
+                            </TabsContent>
+                            <TabsContent value="system">
+                              <NotificationList notifications={notifications.filter(n => n.type === 'system')} />
+                            </TabsContent>
+                            <TabsContent value="donation">
+                              <NotificationList notifications={notifications.filter(n => n.type === 'donation')} />
+                            </TabsContent>
+                            <TabsContent value="request">
+                              <NotificationList notifications={notifications.filter(n => n.type === 'request')} />
+                            </TabsContent>
+                          </Tabs>
                         </CardContent>
                       </Card>
                     </TabsContent>
@@ -799,6 +789,25 @@ export default function FoodCollectionApp() {
           </div>
         )}
       </div>
+    </div>
+  )
+}
+
+function NotificationList({ notifications }: { notifications: Notification[] }) {
+  return (
+    <div className="space-y-4">
+      {notifications.length > 0 ? (
+        notifications.map((notification) => (
+          <div key={notification.id} className="border-b border-gray-200 pb-4">
+            <p className="text-gray-700">{notification.message}</p>
+            <p className="text-sm text-gray-500">
+              {new Date(notification.timestamp).toLocaleString()}
+            </p>
+          </div>
+        ))
+      ) : (
+        <p className="text-gray-600">No hay notificaciones nuevas.</p>
+      )}
     </div>
   )
 }
