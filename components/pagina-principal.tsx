@@ -2,14 +2,14 @@
 
 import { useState, useEffect, useCallback } from 'react'
 import { Button } from "@/components/ui/button"
-import { Card, CardContent, CardHeader, CardTitle, CardFooter, CardDescription } from "@/components/ui/card"
+import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Textarea } from "@/components/ui/textarea"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
-import { AlertCircle, CheckCircle2, Bell, Heart, Utensils, History, Settings, FileText, PieChart } from 'lucide-react'
-import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, PieChart as RePieChart, Pie, LineChart, Line } from 'recharts'
+import { AlertCircle, CheckCircle2, Bell, Heart, Utensils, History, Settings, FileText, PieChart, Send } from 'lucide-react'
+import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, PieChart as RePieChart, Pie, LineChart, Line, Legend } from 'recharts'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 
 interface Donation {
@@ -18,9 +18,10 @@ interface Donation {
   type: string
   quantity: number
   image: string
-  status: 'pending' | 'accepted' | 'delivered'
+  status: 'pending' | 'accepted'  | "rechazada"
   timestamp: number
 }
+
 
 interface Request {
   id: string
@@ -54,10 +55,11 @@ interface Notification {
   type: 'system' | 'donation' | 'request'
   message: string
   timestamp: number
+  username: string
 }
 
 const ADMIN_CODE = "Administrador12345"
-const DATA_RETENTION_PERIOD = 24 * 60 * 60 * 1000 // 24 hours in milliseconds
+const DATA_RETENTION_PERIOD = 24 * 60 * 60 * 1000
 
 export default function FoodCollectionApp() {
   const [activeTab, setActiveTab] = useState("inicio")
@@ -75,6 +77,7 @@ export default function FoodCollectionApp() {
   const [registerUserType, setRegisterUserType] = useState<'beneficiario' | 'restaurante'>('beneficiario')
   const [campaigns, setCampaigns] = useState<Campaign[]>([])
   const [notifications, setNotifications] = useState<Notification[]>([])
+  const [currentUser, setCurrentUser] = useState<User | null>(null)
 
   const loadDataFromLocalStorage = useCallback(() => {
     const loadedDonations = JSON.parse(localStorage.getItem('donations') || '[]')
@@ -117,12 +120,13 @@ export default function FoodCollectionApp() {
     }
   }, [loadDataFromLocalStorage])
 
-  const addNotification = useCallback((message: string, type: 'system' | 'donation' | 'request') => {
+  const addNotification = useCallback((message: string, type: 'system' | 'donation' | 'request', username: string) => {
     const newNotification: Notification = {
       id: Date.now().toString(),
       type,
       message,
-      timestamp: Date.now()
+      timestamp: Date.now(),
+      username
     }
     setNotifications(prev => {
       const updated = [...prev, newNotification]
@@ -147,9 +151,10 @@ export default function FoodCollectionApp() {
     if (user) {
       setIsLoggedIn(true)
       setUserType(user.type)
+      setCurrentUser(user)
       showNotificationMessage('Inicio de sesión exitoso', 'success')
       if (user.type === 'administrador') {
-        addNotification('Nuevo inicio de sesión de administrador', 'system')
+        addNotification('Nuevo inicio de sesión de administrador', 'system', user.username)
       }
     } else {
       showNotificationMessage('Credenciales incorrectas', 'error')
@@ -185,13 +190,14 @@ export default function FoodCollectionApp() {
     showNotificationMessage('Registro exitoso', 'success')
     setShowRegisterForm(false)
     if (type === 'administrador') {
-      addNotification('Nuevo administrador registrado', 'system')
+      addNotification('Nuevo administrador registrado', 'system', username)
     }
   }
 
   const handleLogout = () => {
     setIsLoggedIn(false)
     setUserType(null)
+    setCurrentUser(null)
     setActiveTab("inicio")
   }
 
@@ -214,7 +220,7 @@ export default function FoodCollectionApp() {
       return updated
     })
     showNotificationMessage('Donación registrada con éxito', 'success')
-    addNotification(`Nueva donación de ${newDonation.quantity} ${newDonation.type} por ${newDonation.name}`, 'donation')
+    addNotification(`Nueva donación de ${newDonation.quantity} ${newDonation.type} por ${newDonation.name}`, 'donation', currentUser?.username || 'Usuario desconocido')
     e.currentTarget.reset()
   }
 
@@ -235,24 +241,35 @@ export default function FoodCollectionApp() {
       return updated
     })
     showNotificationMessage('Solicitud enviada con éxito', 'success')
-    addNotification('Nueva solicitud de alimentos recibida', 'request')
+    addNotification(`Nueva solicitud de alimentos recibida de ${newRequest.beneficiaryName}`, 'request', currentUser?.username || 'Usuario desconocido')
     e.currentTarget.reset()
   }
 
-  const handleEditDonation = (id: string) => {
-    // Implement edit functionality
-    console.log('Editing donation with id:', id)
-  }
-
-  const handleDeleteDonation = (id: string) => {
+  const handleApproveDonation = (id: string) => {
     setDonations(prev => {
-      const updated = prev.filter(donation => donation.id !== id)
-      localStorage.setItem('donations', JSON.stringify(updated))
-      return updated
-    })
-    showNotificationMessage('Donación eliminada con éxito', 'success')
-    addNotification('Donación eliminada', 'system')
-  }
+      const updated = prev.map(donation =>
+        donation.id === id ? { ...donation, status: 'accepted' as const } : donation
+      );
+      localStorage.setItem('donations', JSON.stringify(updated));
+      return updated;
+    });
+    showNotificationMessage('Donación aprobada con éxito', 'success');
+    addNotification('Donación aprobada', 'system', currentUser?.username || 'Administrador');
+  };
+
+  const handleRejectDonation = (id: string) => {
+    setDonations(prev => {
+      const updated = prev.map(donation =>
+        donation.id === id ? { ...donation, status: 'rechazada' as const } : donation
+      );
+      localStorage.setItem('donations', JSON.stringify(updated));
+      return updated;
+    });
+  
+    showNotificationMessage('Donación rechazada con éxito', 'success');
+    addNotification('Donación rechazada', 'system', currentUser?.username || 'Administrador');
+  };
+  
 
   const handleAddDonation = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault()
@@ -262,7 +279,7 @@ export default function FoodCollectionApp() {
       name: formData.get('name') as string,
       type: formData.get('donationType') as string,
       quantity: Number(formData.get('quantity')),
-      image: '/placeholder.svg', // You might want to handle image upload separately
+      image: '/placeholder.svg',
       status: 'pending',
       timestamp: Date.now()
     }
@@ -272,7 +289,7 @@ export default function FoodCollectionApp() {
       return updated
     })
     showNotificationMessage('Nueva donación agregada con éxito', 'success')
-    addNotification('Nueva donación agregada manualmente', 'donation')
+    addNotification('Nueva donación agregada manualmente', 'donation', currentUser?.username || 'Administrador')
     setShowAddDonationForm(false)
     e.currentTarget.reset()
   }
@@ -296,25 +313,50 @@ export default function FoodCollectionApp() {
       return updated
     })
     showNotificationMessage('Campaña creada con éxito', 'success')
-    addNotification('Nueva campaña creada', 'system')
+    addNotification('Nueva campaña creada', 'system', currentUser?.username || 'Administrador')
     e.currentTarget.reset()
   }
 
+  const handleApproveRequest = (id: string) => {
+    setRequests(prev => {
+      const updated = prev.map(request =>
+        request.id === id ? { ...request, status: 'approved' as const } : request
+      );
+      localStorage.setItem('requests', JSON.stringify(updated));
+      return updated;
+    });
+    showNotificationMessage('Solicitud aprobada con éxito', 'success');
+    addNotification('Solicitud aprobada', 'system', currentUser?.username || 'Administrador');
+  };
+
+  const handleRejectRequest = (id: string) => {
+    setRequests(prev => {
+      const updated = prev.map(request =>
+        request.id === id ? { ...request, status: 'rejected' as const } : request
+      );
+      localStorage.setItem('requests', JSON.stringify(updated));
+      return updated;
+    });
+    showNotificationMessage('Solicitud rechazada', 'success');
+    addNotification('Solicitud rechazada', 'system', currentUser?.username || 'Administrador');
+  };
   return (
     <div className="relative min-h-screen bg-cover bg-center" style={{ backgroundImage: "url('/img/Diseño sin título.png')" }}>
       <div className="absolute inset-0 filter blur-[10px]" />
       <div className="absolute inset-0 bg-gradient-to-b from-black to-transparent opacity-100" />
       <div className="container mx-auto p-4 relative z-10">
 
-        <h1 className="text-4xl font-bold text-center mb-6 text-blue-900">Proyecto de Recolección de Alimentos</h1>
-
+        <h1 className="text-4xl font-bold text-center mb-6 text-blue-900">
+          Proyecto de Recolección de Alimentos
+          <br />
+          <span className="text-white text-6xl font-extrabold">SaveFood</span>
+        </h1>
         {showNotification && (
           <div className={`fixed top-4 right-4 p-4 rounded-md ${notificationType === 'success' ? 'bg-green-600' : 'bg-red-600'} text-white shadow-lg transition-all duration-300 ease-in-out`}>
             {notificationType === 'success' ? <CheckCircle2 className="inline mr-2" /> : <AlertCircle className="inline mr-2" />}
             {notificationMessage}
           </div>
         )}
-
         {!isLoggedIn ? (
           <Card className="bg-white shadow-lg max-w-md mx-auto">
             <CardHeader>
@@ -341,7 +383,7 @@ export default function FoodCollectionApp() {
                   <div className="grid w-full items-center gap-4">
                     <div className="flex flex-col space-y-1.5">
                       <Label htmlFor="username">Nombre de  Usuario</Label>
-                      <Input id="username" name="username" placeholder="Elige un nombre de usuario" required  />
+                      <Input id="username" name="username" placeholder="Elige un nombre de usuario" required />
                     </div>
                     <div className="flex flex-col space-y-1.5">
                       <Label htmlFor="password">Contraseña</Label>
@@ -379,31 +421,83 @@ export default function FoodCollectionApp() {
             <Button onClick={handleLogout} className="mb-4 bg-red-600 hover:bg-red-700 text-white transition-colors duration-200">Cerrar Sesión</Button>
 
             {userType === 'beneficiario' ? (
-              <Card className="bg-white shadow-lg">
-                <CardHeader>
-                  <CardTitle className="text-2xl text-blue-900">Solicitar Alimentos</CardTitle>
-                  <CardDescription>Llena el formulario para solicitar asistencia alimentaria</CardDescription>
-                </CardHeader>
-                <CardContent>
-                  <form onSubmit={handleRequest}>
-                    <div className="grid w-full items-center gap-4">
-                      <div className="flex flex-col space-y-1.5">
-                        <Label htmlFor="beneficiaryName">Nombre Completo</Label>
-                        <Input id="beneficiaryName" name="beneficiaryName" placeholder="Tu nombre completo" required />
-                      </div>
-                      <div className="flex flex-col space-y-1.5">
-                        <Label htmlFor="address">Dirección</Label>
-                        <Input id="address" name="address" placeholder="Tu dirección" required />
-                      </div>
-                      <div className="flex flex-col space-y-1.5">
-                        <Label htmlFor="needs">Descripción de Necesidades</Label>
-                        <Textarea id="needs" name="needs" placeholder="Describe brevemente tu situación y necesidades" required />
-                      </div>
-                    </div>
-                    <Button type="submit" className="mt-4 w-full bg-blue-600 hover:bg-blue-700 text-white transition-colors duration-200">Enviar Solicitud</Button>
-                  </form>
-                </CardContent>
-              </Card>
+              <Tabs defaultValue="solicitar" className="w-full">
+                <TabsList className="grid w-full grid-cols-2 bg-blue-100 rounded-lg p-1">
+                  <TabsTrigger value="solicitar" className="data-[state=active]:bg-white data-[state=active]:text-blue-900 rounded-md transition-all duration-200">
+                    <Send className="w-4 h-4 mr-2" />
+                    Solicitar Alimentos
+                  </TabsTrigger>
+                  <TabsTrigger value="historial" className="data-[state=active]:bg-white data-[state=active]:text-blue-900 rounded-md transition-all duration-200">
+                    <History className="w-4 h-4 mr-2" />
+                    Historial de Solicitudes
+                  </TabsTrigger>
+                </TabsList>
+
+                <TabsContent value="solicitar" className="flex-1">
+                  <Card className="h-full bg-white shadow-lg">
+                    <CardHeader>
+                      <CardTitle className="text-2xl text-blue-900">Solicitar Alimentos</CardTitle>
+                      <CardDescription>Llena el formulario para solicitar asistencia alimentaria</CardDescription>
+                    </CardHeader>
+                    <CardContent>
+                      <form onSubmit={handleRequest}>
+                        <div className="grid w-full items-center gap-4">
+                          <div className="flex flex-col space-y-1.5">
+                            <Label htmlFor="beneficiaryName">Nombre Completo</Label>
+                            <Input id="beneficiaryName" name="beneficiaryName" placeholder="Tu nombre completo" required />
+                          </div>
+                          <div className="flex flex-col space-y-1.5">
+                            <Label htmlFor="address">Dirección</Label>
+                            <Input id="address" name="address" placeholder="Tu dirección" required />
+                          </div>
+                          <div className="flex flex-col space-y-1.5">
+                            <Label htmlFor="needs">Descripción de Necesidades</Label>
+                            <Textarea id="needs" name="needs" placeholder="Describe brevemente tu situación y necesidades" required />
+                          </div>
+                        </div>
+                        <Button type="submit" className="mt-4 w-full bg-blue-600 hover:bg-blue-700 text-white transition-colors duration-200">Enviar Solicitud</Button>
+                      </form>
+                    </CardContent>
+                  </Card>
+                </TabsContent>
+
+                <TabsContent value="historial" className="flex-1">
+                  <Card className="h-full bg-white shadow-lg">
+                    <CardHeader>
+                      <CardTitle className="text-2xl text-blue-900">Historial de Solicitudes</CardTitle>
+                      <CardDescription>Revisa el estado de tus solicitudes anteriores</CardDescription>
+                    </CardHeader>
+                    <CardContent style={{ height: '250px', overflowY: 'auto' }}> {/* Reduce la altura aquí */}
+                      {requests.filter(request => request.beneficiaryName === currentUser?.username).length > 0 ? (
+                        <div className="space-y-4">
+                          {requests
+                            .filter(request => request.beneficiaryName === currentUser?.username)
+                            .map((request) => (
+                              <div key={request.id} className="border-b border-gray-200 pb-4">
+                                <h3 className="text-lg font-semibold text-blue-900">Solicitud del {new Date(request.timestamp).toLocaleDateString()}</h3>
+                                <p className="text-gray-600">Dirección: {request.address}</p>
+                                <p className="text-gray-600">Necesidades: {request.needs}</p>
+                                <p className="text-gray-600">Estado:
+                                  <span className={`font-medium ${request.status === 'approved' ? 'text-green-600' :
+                                    request.status === 'rejected' ? 'text-red-600' :
+                                      'text-yellow-600'
+                                    }`}>
+                                    {' '}
+                                    {request.status === 'approved' ? 'Aprobada' :
+                                      request.status === 'rejected' ? 'Rechazada' :
+                                        'Pendiente'}
+                                  </span>
+                                </p>
+                              </div>
+                            ))}
+                        </div>
+                      ) : (
+                        <p className="text-gray-600">No has realizado ninguna solicitud aún.</p>
+                      )}
+                    </CardContent>
+                  </Card>
+                </TabsContent>
+              </Tabs>
             ) : (
               <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
                 <TabsList className="grid w-full grid-cols-5 bg-blue-100 rounded-lg p-1">
@@ -541,8 +635,12 @@ export default function FoodCollectionApp() {
                                     </div>
                                   </div>
                                   <div className="space-x-2">
-                                    <Button variant="outline" onClick={() => handleEditDonation(donation.id)}>Editar</Button>
-                                    <Button variant="destructive" onClick={() => handleDeleteDonation(donation.id)}>Eliminar</Button>
+                                    {donation.status === 'pending' && (
+                                      <>
+                                      <Button variant="outline" onClick={() => handleApproveDonation(donation.id)}>Aprobar</Button>
+                                      <Button variant="destructive" onClick={() => handleRejectDonation(donation.id)}>Rechazar</Button>
+                                      </>
+                                    )}
                                   </div>
                                 </div>
                               ))}
@@ -599,8 +697,12 @@ export default function FoodCollectionApp() {
                                   <p className="text-gray-600">Necesidades: {request.needs}</p>
                                   <p className="text-gray-600">Estado: <span className="font-medium">{request.status}</span></p>
                                   <div className="mt-2 space-x-2">
-                                    <Button variant="outline" onClick={() => console.log('Aprobar solicitud', request.id)}>Aprobar</Button>
-                                    <Button variant="destructive" onClick={() => console.log('Rechazar solicitud', request.id)}>Rechazar</Button>
+                                    {request.status === 'pending' && (
+                                      <>
+                                        <Button variant="outline" onClick={() => handleApproveRequest(request.id)}>Aprobar</Button>
+                                        <Button variant="destructive" onClick={() => handleRejectRequest(request.id)}>Rechazar</Button>
+                                      </>
+                                    )}
                                   </div>
                                 </div>
                               ))}
@@ -657,91 +759,103 @@ export default function FoodCollectionApp() {
                     </TabsContent>
 
                     <TabsContent value="reports">
-                      <Card className="bg-white shadow-lg">
-                        <CardHeader>
-                          <CardTitle className="text-2xl text-blue-900">Reportes</CardTitle>
-                          <CardDescription>Generación y visualización de reportes</CardDescription>
-                        </CardHeader>
-                        <CardContent>
-                          <div className="flex space-x-4 mb-4">
-                            <Button variant="outline" onClick={() => setSelectedReport('campanas')} className={selectedReport === 'campanas' ? 'bg-blue-100' : ''}>Campañas</Button>
-                            <Button variant="outline" onClick={() => setSelectedReport('donacionesAceptadas')} className={selectedReport === 'donacionesAceptadas' ? 'bg-blue-100' : ''}>Donaciones Aceptadas</Button>
-                            <Button variant="outline" onClick={() => setSelectedReport('donacionesEntregadas')} className={selectedReport === 'donacionesEntregadas' ? 'bg-blue-100' : ''}>Donaciones Entregadas</Button>
-                          </div>
-                          <div className="grid grid-cols-2 gap-4 h-64 w-full">
-                            {/* Primer gráfico - Datos de campaña actual */}
-                            <ResponsiveContainer width="100%" height="100%">
-                              <BarChart data={[
-                                { name: 'Campaña 1', current: 150 },
-                                { name: 'Campaña 2', current: 200 },
-                                { name: 'Campaña 3', current: 180 },
-                                { name: 'Campaña 4', current: 120 }
-                              ]}>
-                                <XAxis dataKey="name" />
-                                <YAxis />
-                                <Tooltip />
-                                <Bar dataKey="current" fill="#3B82F6" />
-                              </BarChart>
-                            </ResponsiveContainer>
+  <Card className="bg-white shadow-lg">
+    <CardHeader>
+      <CardTitle className="text-2xl text-blue-900">Reportes</CardTitle>
+      <CardDescription>Generación y visualización de reportes</CardDescription>
+    </CardHeader>
+    <CardContent>
+      <div className="flex space-x-4 mb-4">
+        <Button variant="outline" onClick={() => setSelectedReport('campanas')} className={selectedReport === 'campanas' ? 'bg-blue-100' : ''}>Campañas</Button>
+        <Button variant="outline" onClick={() => setSelectedReport('donacionesAceptadas')} className={selectedReport === 'donacionesAceptadas' ? 'bg-blue-100' : ''}>Donaciones Aceptadas</Button>
+        <Button variant="outline" onClick={() => setSelectedReport('donacionesEntregadas')} className={selectedReport === 'donacionesEntregadas' ? 'bg-blue-100' : ''}>Donaciones Entregadas</Button>
+      </div>
 
-                            {/* Segundo gráfico - Cambia según la selección */}
-                            <ResponsiveContainer width="100%" height="100%">
-                              {selectedReport === 'campanas' ? (
-                                <RePieChart>
-                                  <Pie 
-                                    dataKey="value" 
-                                    data={[
-                                      { name: 'Aceptadas', value: donations.filter(d => d.status === 'accepted').length },
-                                      { name: 'Pendientes', value: donations.filter(d => d.status === 'pending').length },
-                                    ]} 
-                                    fill="#3B82F6" 
-                                    label 
-                                  />
-                                  <Tooltip />
-                                </RePieChart>
-                              ) : selectedReport === 'donacionesAceptadas' ? (
-                                <LineChart data={[
-                                  { name: 'Ene', value: 400 },
-                                  { name: 'Feb', value: 300 },
-                                  { name: 'Mar', value: 200 },
-                                  { name: 'Abr', value: 278 },
-                                  { name: 'May', value: 189 },
-                                ]}>
-                                  <XAxis dataKey="name" />
-                                  <YAxis />
-                                  <Tooltip />
-                                  <Line type="monotone" dataKey="value" stroke="#3B82F6" />
-                                </LineChart>
-                              ) : (
-                                <BarChart data={[
-                                  { name: 'Ene', value: 400 },
-                                  { name: 'Feb', value: 300 },
-                                  { name: 'Mar', value: 200 },
-                                  { name: 'Abr', value: 278 },
-                                  { name: 'May', value: 189 },
-                                ]}>
-                                  <XAxis dataKey="name" />
-                                  <YAxis />
-                                  <Tooltip />
-                                  <Bar dataKey="value" fill="#3B82F6" />
-                                </BarChart>
-                              )}
-                            </ResponsiveContainer>
-                          </div>
-                          <div className="mt-4 text-gray-600">
-                            {selectedReport === 'campanas' && (
-                              <p>Los gráficos muestran el progreso de las campañas activas y la distribución de donaciones aceptadas vs pendientes.</p>
-                            )}
-                            {selectedReport === 'donacionesAceptadas' && (
-                              <p>Los gráficos muestran el estado actual de las campañas y la tendencia de donaciones aceptadas en el tiempo.</p>
-                            )}
-                            {selectedReport === 'donacionesEntregadas' && (
-                              <p>Los gráficos muestran el progreso de las campañas y la tendencia de donaciones entregadas a lo largo del tiempo.</p>
-                            )}
-                          </div>
-                        </CardContent>
-                      </Card>
-                    </TabsContent>
+      <div className="grid grid-cols-2 gap-4 h-64 w-full">
+        {/* Primer gráfico - Datos de campaña actual (gráfico de barras) */}
+        {selectedReport === 'campanas' && (
+          <ResponsiveContainer width="100%" height="100%">
+            <BarChart data={[ 
+              { name: 'Campaña 1', current: 150 },
+              { name: 'Campaña 2', current: 200 },
+              { name: 'Campaña 3', current: 180 },
+              { name: 'Campaña 4', current: 120 }
+            ]}>
+              <XAxis dataKey="name" />
+              <YAxis />
+              <Tooltip />
+              <Bar dataKey="current" fill="#2196F3" /> {/* Azul */}
+            </BarChart>
+          </ResponsiveContainer>
+        )}
+
+        {/* Gráfico de barras para las campañas (sustituye el gráfico de pastel) */}
+        {selectedReport === 'campanas' && (
+          <ResponsiveContainer width="100%" height="100%">
+            <BarChart data={[ 
+              { name: 'Aceptadas', value: donations.filter(d => d.status === 'accepted').length },
+              { name: 'Pendientes', value: donations.filter(d => d.status === 'pending').length },
+              { name: 'Rechazadas', value: donations.filter(d => d.status === 'rechazada').length }
+            ]}>
+              <XAxis dataKey="name" />
+              <YAxis />
+              <Tooltip />
+              <Bar dataKey="value" fill="#F44336" /> {/* Rojo */}
+            </BarChart>
+          </ResponsiveContainer>
+        )}
+
+        {/* Segundo gráfico - Donaciones Aceptadas (gráfico de líneas) */}
+        {selectedReport === 'donacionesAceptadas' && (
+          <ResponsiveContainer width="100%" height="100%">
+            <LineChart data={[ 
+              { name: 'Ene', value: 400 },
+              { name: 'Feb', value: 300 },
+              { name: 'Mar', value: 200 },
+              { name: 'Abr', value: 278 },
+              { name: 'May', value: 189 }
+            ]}>
+              <XAxis dataKey="name" />
+              <YAxis />
+              <Tooltip />
+              <Line type="monotone" dataKey="value" stroke="#2196F3" /> {/* Azul */}
+            </LineChart>
+          </ResponsiveContainer>
+        )}
+
+        {/* Tercer gráfico - Donaciones Entregadas (gráfico de barras) */}
+        {selectedReport === 'donacionesEntregadas' && (
+          <ResponsiveContainer width="100%" height="100%">
+            <BarChart data={[ 
+              { name: 'Ene', value: 400 },
+              { name: 'Feb', value: 300 },
+              { name: 'Mar', value: 200 },
+              { name: 'Abr', value: 278 },
+              { name: 'May', value: 189 }
+            ]}>
+              <XAxis dataKey="name" />
+              <YAxis />
+              <Tooltip />
+              <Bar dataKey="value" fill="#F44336" /> {/* Rojo */}
+            </BarChart>
+          </ResponsiveContainer>
+        )}
+      </div>
+
+      <div className="mt-4 text-gray-600">
+        {selectedReport === 'campanas' && (
+          <p>Los gráficos muestran el progreso de las campañas activas y la distribución de donaciones aceptadas vs pendientes.</p>
+        )}
+        {selectedReport === 'donacionesAceptadas' && (
+          <p>Los gráficos muestran la tendencia de donaciones aceptadas en el tiempo.</p>
+        )}
+        {selectedReport === 'donacionesEntregadas' && (
+          <p>Los gráficos muestran el progreso de las donaciones entregadas a lo largo del tiempo.</p>
+        )}
+      </div>
+    </CardContent>
+  </Card>
+</TabsContent>
 
                     <TabsContent value="notifications">
                       <Card className="bg-white shadow-lg">
@@ -749,7 +863,7 @@ export default function FoodCollectionApp() {
                           <CardTitle className="text-2xl text-blue-900">Notificaciones</CardTitle>
                           <CardDescription>Últimas actividades en el sistema</CardDescription>
                         </CardHeader>
-                        <CardContent>
+                        <CardContent style={{ height: '300px', overflowY: 'auto' }}> {/* Ajustar altura y habilitar scroll */}
                           <Tabs defaultValue="all">
                             <TabsList>
                               <TabsTrigger value="all">Todas</TabsTrigger>
@@ -801,7 +915,7 @@ function NotificationList({ notifications }: { notifications: Notification[] }) 
           <div key={notification.id} className="border-b border-gray-200 pb-4">
             <p className="text-gray-700">{notification.message}</p>
             <p className="text-sm text-gray-500">
-              {new Date(notification.timestamp).toLocaleString()}
+              Por: {notification.username} - {new Date(notification.timestamp).toLocaleString()}
             </p>
           </div>
         ))
