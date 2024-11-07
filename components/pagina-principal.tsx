@@ -19,7 +19,7 @@ const WikiPage: React.FC = () => {
             Wiki: Globalización y Economía Digital
           </h1>
           <p className="text-xl text-gray-600 dark:text-gray-300">
-            Explorando los conceptos clave de la era digital
+            Explorando los conceptos clave de la era digital, By Darwin Javier S. G. UNA
           </p>
         </header>
 
