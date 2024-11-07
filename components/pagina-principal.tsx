@@ -1,5 +1,5 @@
 'use client';
-
+// eslint-disable-next-line react/no-unescaped-entities
 import React, { useState } from 'react';
 import Image from 'next/image';
 import { ChevronDown, BookOpen, Globe, Smartphone, Cloud } from 'lucide-react';
