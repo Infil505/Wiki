@@ -49,16 +49,5 @@ Darwin Javier S. G. - UNA (Universidad Nacional)
 🌟 Invitación
 Sumérgete en este viaje digital. Descubre cómo la tecnología está reescribiendo las reglas de la economía global.
 
-📋 Instalación
-
-Clonar el repositorio
-git clone https://github.com/tu-usuario/globalizacion-economia-digital
-
-Instalar dependencias
-npm install
-
-Iniciar el proyecto
-npm run dev
-
 
 **#TechRevolution #DigitalEconomy #Globalization**
